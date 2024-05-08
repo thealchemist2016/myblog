@@ -1,55 +1,83 @@
-# Welcome to Jekyll!
-#
-# This config file is meant for settings that affect your whole blog, values
-# which you are expected to set up once and rarely edit after that. If you find
-# yourself editing this file very often, consider using Jekyll's data files
-# feature for the data you need to update frequently.
-#
-# For technical reasons, this file is *NOT* reloaded automatically when you use
-# 'bundle exec jekyll serve'. If you change this file, please restart the server process.
-#
-# If you need help with YAML syntax, here are some quick references for you:
-# https://learn-the-web.algonquindesign.ca/topics/markdown-yaml-cheat-sheet/#yaml
-# https://learnxinyminutes.com/docs/yaml/
-#
-# Site settings
-# These are used to personalize your new site. If you look in the HTML files,
-# you will see them accessed via {{ site.title }}, {{ site.email }}, and so on.
-# You can create any custom variable you would like, and they will be accessible
-# in the templates via {{ site.myvariable }}.
+# Workflow for building and deploying a Jekyll site to GitHub Pages
+name: Deploy Jekyll site to Page
 
-title: Your awesome title
-email: your-email@example.com
-description: >- # this means to ignore newlines until "baseurl:"
-  Write an awesome description for your new site here. You can edit this
-  line in _config.yml. It will appear in your document head meta (for
-  Google search results) and in your feed.xml site description.
-baseurl: "" # the subpath of your site, e.g. /blog
-url: "" # the base hostname & protocol for your site, e.g. http://example.com
-twitter_username: jekyllrb
-github_username:  jekyll
+on:
+  # Runs on pushes targeting the default branch
+  push:
+    branches: ["main"]
 
-# Build settings
-theme: minima
-plugins:
-  - jekyll-feed
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
-# Exclude from processing.
-# The following items will not be processed, by default.
-# Any item listed under the `exclude:` key here will be automatically added to
-# the internal "default list".
-#
-# Excluded items can be processed by explicitly listing the directories or
-# their entries' file path in the `include:` list.
-#
-# exclude:
-#   - .sass-cache/
-#   - .jekyll-cache/
-#   - gemfiles/
-#   - Gemfile
-#   - Gemfile.lock
-#   - node_modules/
-#   - vendor/bundle/
-#   - vendor/cache/
-#   - vendor/gems/
-#   - vendor/ruby/
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  # Build job
+  build:
+    name: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          # Not needed with a .ruby-version file
+          ruby-version: "3.1"
+          # Runs 'bundle install' and caches installed gems automatically
+          bundler-cache: true
+
+      - name: Version info
+        run: |
+          ruby --version
+          gem --version
+          bundle --version
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v1
+
+      - name: Checking Jekyll configuration
+        run: bundle exec jekyll doctor
+
+      - name: Build with Jekyll
+        # Defaults output to '/_site'
+        run: bundle exec jekyll build --baseurl ${{ steps.pages.outputs.base_path }} --profile --trace
+        env:
+          JEKYLL_ENV: production
+
+      - name: Upload artifact
+        # This will automatically upload an artifact from the '/_site' directory
+        uses: actions/upload-pages-artifact@v1
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: ./_site/
+
+      - name: Cleaning up
+        run: bundle exec jekyll clean
+
+  # Deployment job
+  deploy:
+    name: deploy
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ github.ref == 'refs/heads/main' }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
+        if: ${{ success() }}
